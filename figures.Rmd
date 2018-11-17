@@ -2,7 +2,10 @@
 title: "MICB 405 Project 2"
 author: "Shannah"
 date: "November 17, 2018"
-output: html_document
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
