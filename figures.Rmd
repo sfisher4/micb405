@@ -1,0 +1,36 @@
+---
+title: "MICB 405 Project 2"
+author: "Shannah"
+date: "November 17, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+```
+
+First I will analyse the MAGs from checkM output
+``` {r}
+library(tidyverse)
+
+#Load .tsv file from MetaBAT2 to dat
+bin_dat <- read_tsv(file="MetaBAT2_SaanichInlet_200m_min1500_checkM_stdout.tsv", col_names = TRUE)
+
+#Rename Marker lineage so it's one string (makes it easier later)
+bin_dat <- bin_dat %>%
+  dplyr::rename('Marker_lineage' = 'Marker lineage')
+
+#Add new column with just lineage for point colors
+bin_dat <- bin_dat %>%
+  dplyr::mutate('lineage' = gsub(".*__(*)", "\\1", Marker_lineage),
+                'lineage' = gsub("\\(|\\)", "", lineage),
+                'lineage' = gsub("UID.*", "", lineage))
+
+#Plotting Completeness vs Contamination of MAGs at 200m
+bin_dat %>%
+  ggplot(aes(x=Completeness, y=Contamination, colour=lineage)) +
+  geom_point() +
+  scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
+                                "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
+                                "#ffff99","#b15928", "#969696")) #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
+```
