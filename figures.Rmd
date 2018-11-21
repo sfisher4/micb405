@@ -10,14 +10,20 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+library(tidyr)
+library(dplyr)
+library(pathview)
+library(tidyverse)
 ```
 
 First I will analyse the MAGs from checkM output
-``` {r}
-library(tidyverse)
+```{r}
+
+#Probably want to include as many MAGs as possible because we are wanting to fill in a pathway
 
 #Load .tsv file from MetaBAT2 to dat
 bin_dat <- read_tsv(file="MetaBAT2_SaanichInlet_200m_min1500_checkM_stdout.tsv", col_names = TRUE)
+
 
 #Rename Marker lineage so it's one string (makes it easier later)
 bin_dat <- bin_dat %>%
@@ -36,4 +42,100 @@ bin_dat %>%
   scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
                                 "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
                                 "#ffff99","#b15928", "#969696")) #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
+
+```
+
+Visualizing the metabolic map with pathview
+This tutorial is meant to take your KEGG Ortholog (KO) annotation tables from KAAS, and one of the rpkm files (.csv format) and view a pathway or metabolic map with these data layered on.
+
+Before you begin loading, transforming, and playing with data we will need to load the following libraries at the very least:
+
+
+Now we are going to read our tabular files. First is KO annotation tables (query.ko.txt) then the rpkm file. I'm using rename to assign names to each of the columns as these do not have headers.
+
+```{r, read, warning=FALSE, message=FALSE}
+ko <- read.table("SaanichInlet_MAGs_ORFs_ko.cleaned.txt") %>% 
+  dplyr::rename(orf = V1) %>% 
+  dplyr::rename(ko = V2)
+
+#TODO: make a loop?
+rpkm_42 <- read.csv("SI042_200m.RPKM.csv", header=FALSE) %>% 
+  dplyr::rename(orf = V1) %>% 
+  dplyr::rename(rpkm = V2)
+rpkm_48 <- read.csv("SI048_200m.RPKM.csv", header=FALSE) %>% 
+  dplyr::rename(orf = V1) %>% 
+  dplyr::rename(rpkm = V2)
+rpkm_73 <- read.csv("SI073_200m.RPKM.csv", header=FALSE) %>% 
+  dplyr::rename(orf = V1) %>% 
+  dplyr::rename(rpkm = V2)
+rpkm_74 <- read.csv("SI074_200m.RPKM.csv", header=FALSE) %>% 
+  dplyr::rename(orf = V1) %>% 
+  dplyr::rename(rpkm = V2)
+rpkm_75 <- read.csv("SI075_200m.RPKM.csv", header=FALSE) %>% 
+  dplyr::rename(orf = V1) %>% 
+  dplyr::rename(rpkm = V2)
+```
+
+Here are the tables in their current form, ready for merging by `orf`:
+```{r, echo=FALSE}
+head(ko)
+head(rpkm_42)
+head(rpkm_48)
+head(rpkm_73)
+head(rpkm_74)
+head(rpkm_75)
+
+#rpkm_42, rpkm_48, rpkm_73, rpkm_74, rpkm_75
+```
+
+Next steps are to join these two tables and some basic transformations to make things a bit easier for `pathview`. 
+I've separated, or split, the `orf` value of each row into two new variables: `mag` and `orf_id` corresponding to the character string before and after the underscore in `orf`. This makes it easier to `group_by` MAGs and will be necessary for joining other tables (such as checkM, gtdbtk, etc.) into one dataframe (to rule them all).
+
+The `summarise` code is summing all RPKM values assigned to a KO number for each MAG. This is useful to prevent multiple rows in an eventual matrix for pathview for each copy found. Or accidentally dropping those data if we're not careful. Anyway, we can freely sum RPKM values and that is what is easiest here.
+
+__NOTE__: If your are dealing with RPKM values from multiple cruises (in this example I am only dealing with RPKM from SI042) you will also need to group by a `cruise` variable so these are not summed. Or maybe you want them to be if you are not interested in the time/season/cruise variable. 
+If you are interested in visualizing the variability in transcription of a single MAG across the cruises you may also want to `filter` for your MAG of interest then group by `ko` and `cruise`. It all depends on what question you want to answer so be mindful here!
+
+```{r, arrange, warning=FALSE, message=FALSE}
+#rpkm_42, rpkm_48, rpkm_73, rpkm_74, rpkm_75
+
+ko_rpkm_42 <- left_join(ko, rpkm_42, by="orf") %>% 
+  separate(orf, into=c("mag", "orf_id")) # Split the Prokka ORF names into MAG identifier and ORF
+ko_rpkm_48 <- left_join(ko, rpkm_48, by="orf") %>% 
+  separate(orf, into=c("mag", "orf_id")) # Split the Prokka ORF names into MAG identifier and ORF
+ko_rpkm_73 <- left_join(ko, rpkm_73, by="orf") %>% 
+  separate(orf, into=c("mag", "orf_id")) # Split the Prokka ORF names into MAG identifier and ORF
+ko_rpkm_74 <- left_join(ko, rpkm_74, by="orf") %>% 
+  separate(orf, into=c("mag", "orf_id")) # Split the Prokka ORF names into MAG identifier and ORF
+ko_rpkm_75 <- left_join(ko, rpkm_75, by="orf") %>% 
+  separate(orf, into=c("mag", "orf_id")) # Split the Prokka ORF names into MAG identifier and ORF
+#Merge all
+ko_rpkm <- rbind(ko_rpkm_42, ko_rpkm_48, ko_rpkm_73, ko_rpkm_74, ko_rpkm_75)
+
+#number for joining
+t_rpkm <- ko_rpkm %>% 
+  group_by(mag, ko) %>% 
+  summarise(total = sum(rpkm)) 
+rpkm_mat <- spread(t_rpkm, key = mag, value = total)
+```
+
+As an example, we can view the nitrogen metabolism capabilities of our MAGs. To view a different pathway or metabolism the `pathway.id` parameter will need to be changed. Searching for your pathway of interest via the KEGG browser is likely the easiest way to find these IDs.
+
+We can also view the dataframe that is generated by `pathview`. Unfortunately it is not that interesting or useful.
+
+```{r, pathviewing, warning=FALSE, message=FALSE}
+# Nitrogen metabolism
+n.pv <- pathview(gene.data = rpkm_mat,
+                 species = "ko",
+                 pathway.id="00910",
+                 kegg.dir = "C:\\Users\\Shannah\\OneDrive\\Uni-Year-5\\MICB_405\\Project2")
+head(n.pv$plot.data.gene)
+```
+
+
+<!-- Here is a file that pathview automatically writes to your `kegg.dir` directory. -->
+
+<!-- !["An example nitrogen metabolism wiring diagram derived from Saanich Inlet MAGs. There are no negative RPKM values and therefore the lowest value is 0. Vertical red bars indicate some MAGs are actively transcirbing genes involved in disimilatory nitrate reduction, denitrification and nitrification."](/home/connor/Desktop/MICB405_TAship/MICB405-Metagenomics/2018/testing/ko00910.pathview.multi.png) -->
+
+
 ```
