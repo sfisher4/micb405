@@ -14,78 +14,30 @@ library(tidyr)
 library(dplyr)
 library(pathview)
 library(tidyverse)
+
+#If come across negative vector error then you should subset your data (for ex. by proteobar)
 ```
-
-First I will analyse the MAGs from checkM output
-```{r}
-
-#Probably want to include as many MAGs as possible because we are wanting to fill in a pathway
-
-#Load .tsv file from MetaBAT2 to dat
-bin_dat <- read_tsv(file="MetaBAT2_SaanichInlet_200m_min1500_checkM_stdout.tsv", col_names = TRUE)
-
-
-#Rename Marker lineage so it's one string (makes it easier later)
-bin_dat <- bin_dat %>%
-  dplyr::rename('Marker_lineage' = 'Marker lineage')
-
-#Add new column with just lineage for point colors
-bin_dat <- bin_dat %>%
-  dplyr::mutate('lineage' = gsub(".*__(*)", "\\1", Marker_lineage),
-                'lineage' = gsub("\\(|\\)", "", lineage),
-                'lineage' = gsub("UID.*", "", lineage))
-
-#Plotting Completeness vs Contamination of MAGs at 200m
-bin_dat %>%
-  ggplot(aes(x=Completeness, y=Contamination, colour=lineage)) +
-  geom_point() +
-  scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
-                                "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
-                                "#ffff99","#b15928", "#969696")) #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
-
-```
-
-Visualizing the metabolic map with pathview
-This tutorial is meant to take your KEGG Ortholog (KO) annotation tables from KAAS, and one of the rpkm files (.csv format) and view a pathway or metabolic map with these data layered on.
-
-Before you begin loading, transforming, and playing with data we will need to load the following libraries at the very least:
-
-
-Now we are going to read our tabular files. First is KO annotation tables (query.ko.txt) then the rpkm file. I'm using rename to assign names to each of the columns as these do not have headers.
 
 ```{r, read, warning=FALSE, message=FALSE}
 ko <- read.table("SaanichInlet_MAGs_ORFs_ko.cleaned.txt") %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(ko = V2)
 
-#TODO: make a loop?
-rpkm_42 <- read.csv("SI042_200m.RPKM.csv", header=FALSE) %>% 
+rpkm_42 <- read.table("SI042_200m.RPKM.csv", header=FALSE, sep=',') %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(rpkm = V2)
-rpkm_48 <- read.csv("SI048_200m.RPKM.csv", header=FALSE) %>% 
+rpkm_48 <- read.table("SI048_200m.RPKM.csv", header=FALSE, sep=',') %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(rpkm = V2)
-rpkm_73 <- read.csv("SI073_200m.RPKM.csv", header=FALSE) %>% 
+rpkm_73 <- read.table("SI073_200m.RPKM.csv", header=FALSE, sep=',') %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(rpkm = V2)
-rpkm_74 <- read.csv("SI074_200m.RPKM.csv", header=FALSE) %>% 
+rpkm_74 <- read.table("SI074_200m.RPKM.csv", header=FALSE, sep=',') %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(rpkm = V2)
-rpkm_75 <- read.csv("SI075_200m.RPKM.csv", header=FALSE) %>% 
+rpkm_75 <- read.table("SI075_200m.RPKM.csv", header=FALSE, sep=',') %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(rpkm = V2)
-```
-
-Here are the tables in their current form, ready for merging by `orf`:
-```{r, echo=FALSE}
-head(ko)
-head(rpkm_42)
-head(rpkm_48)
-head(rpkm_73)
-head(rpkm_74)
-head(rpkm_75)
-
-#rpkm_42, rpkm_48, rpkm_73, rpkm_74, rpkm_75
 ```
 
 Next steps are to join these two tables and some basic transformations to make things a bit easier for `pathview`. 
@@ -119,6 +71,52 @@ t_rpkm <- ko_rpkm %>%
 rpkm_mat <- spread(t_rpkm, key = mag, value = total)
 ```
 
+
+First I will analyse the MAGs from checkM output with rpkm abundance values
+```{r}
+
+#TODO: include dotted lines to show ranges
+#TODO: include the units on each axis (should be %)
+#TODO: convert contamination to percentage ?!?!
+#TODO: include a None lineage?
+#TODO: include range labels
+
+#Probably want to include as many MAGs as possible because we are wanting to fill in a pathway
+
+#Load .tsv file from MetaBAT2 to dat
+bin_dat <- read_tsv(file="MetaBAT2_SaanichInlet_200m_min1500_checkM_stdout.tsv", col_names = TRUE)
+
+
+#Rename Marker lineage so it's one string (makes it easier later)
+bin_dat <- bin_dat %>%
+  dplyr::rename('Marker_lineage' = 'Marker lineage')
+
+#Add new column with just lineage for point colors
+bin_dat <- bin_dat %>%
+  dplyr::mutate('lineage' = gsub(".*__(*)", "\\1", Marker_lineage),
+                'lineage' = gsub("\\(|\\)", "", lineage),
+                'lineage' = gsub("UID.*", "", lineage))
+
+
+#Plotting Completeness vs Contamination of MAGs at 200m
+bin_dat %>%
+  ggplot(aes(x=Completeness, y=Contamination, colour=lineage)) +
+  geom_point() +
+  #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
+  scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
+                                "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
+                                "#ffff99","#b15928", "#969696")) + 
+  geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") + 
+  geom_vline(xintercept = 70, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
+  geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
+  geom_hline(yintercept = 50, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
+  geom_hline(yintercept = 70, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
+  geom_hline(yintercept = 90, linetype = "dashed", size = 1, color = "#808080")   #TODO: check what this value is
+
+```
+
+Visualizing the metabolic map with pathview
+
 As an example, we can view the nitrogen metabolism capabilities of our MAGs. To view a different pathway or metabolism the `pathway.id` parameter will need to be changed. Searching for your pathway of interest via the KEGG browser is likely the easiest way to find these IDs.
 
 We can also view the dataframe that is generated by `pathview`. Unfortunately it is not that interesting or useful.
@@ -127,15 +125,38 @@ We can also view the dataframe that is generated by `pathview`. Unfortunately it
 # Nitrogen metabolism
 n.pv <- pathview(gene.data = rpkm_mat,
                  species = "ko",
-                 pathway.id="00910",
+                 pathway.id="00920",
                  kegg.dir = "C:\\Users\\Shannah\\OneDrive\\Uni-Year-5\\MICB_405\\Project2")
 head(n.pv$plot.data.gene)
 ```
 
 
-<!-- Here is a file that pathview automatically writes to your `kegg.dir` directory. -->
+*Geochemical Gradients
 
-<!-- !["An example nitrogen metabolism wiring diagram derived from Saanich Inlet MAGs. There are no negative RPKM values and therefore the lowest value is 0. Vertical red bars indicate some MAGs are actively transcirbing genes involved in disimilatory nitrate reduction, denitrification and nitrification."](/home/connor/Desktop/MICB405_TAship/MICB405-Metagenomics/2018/testing/ko00910.pathview.multi.png) -->
 
+```{r}
+# Load raw data
+raw_dat <- readr::read_csv("Saanich_Data.csv")
+
+#Clean dat
+dat <- 
+  raw_dat %>%
+  dplyr::select(Cruise, Date, Depth, Temperature,
+         WS_O2, WS_NO3, WS_H2S) %>%
+  dplyr::filter(!is.na(WS_O2)) %>%
+  dplyr::rename(O2_uM=WS_O2, NO3_uM=WS_NO3, H2S_uM=WS_H2S) %>%
+  dplyr::mutate(Depth_m=Depth*1000)
+
+
+#want to create a plot with all 3 variables as x axis and depth as y with shape as type
+#can manipulate data frame to do so
+dat %>%
+  dplyr::select(Depth_m, H2S_uM, NO3_uM, O2_uM) %>%
+  gather(key = "Chemical", value = "Concentration", -Depth_m) %>%
+  ggplot() +
+  geom_point(aes(x=Concentration, y=Depth_m, shape=Chemical, colour=Chemical))
+  
 
 ```
+
+
