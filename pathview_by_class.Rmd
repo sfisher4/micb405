@@ -1,5 +1,5 @@
 ---
-title: "Pathview Aggregated by Phylum"
+title: "Pathview Aggregated by Class"
 author: "Shannah"
 date: "November 25, 2018"
 output: html_document
@@ -77,7 +77,7 @@ metag_rpkm <- read.table("SaanichInlet_200m_binned.rpkm.csv", header=T, sep=',')
 We can also determine the number of Phyla present in our bins, and how many MAGs are representing each. Of course, you can do this for all the taxonomic ranks. I'm also going to remove the Genus and Species fields since these are probably not relevant to your analysis (if so, then skip that step) and not very trustworthy given the whole binning procedure.
 ```{r diversity}
 gtdb_dat %>% 
-  group_by(Phylum) %>% 
+  group_by(Class) %>% 
   summarise(count = n_distinct(mag)) %>% 
   kable()
 gtdb_dat <- dplyr::select(gtdb_dat, mag, Kingdom, Phylum, Class, Order, Family)
@@ -125,19 +125,18 @@ ko_rpkm_75 <- left_join(ko, rpkm_75, by="orf") %>%
 
 rpkm_dat <- rbind(ko_rpkm_48, ko_rpkm_73, ko_rpkm_74, ko_rpkm_75)
 
+head(rpkm_dat) %>% kable()
+
+
 #Commenting out connors tutorial code
 # rpkm_dat <- left_join(ko, metat_rpkm, by="orf") %>%
 #   separate(orf, into=c("prokka_id", "orf_id")) %>% # Split the Prokka ORF names into MAG identifier and ORF number for joining
 #   left_join(prokka_mag_map, by="prokka_id") %>% 
 #   left_join(gtdb_dat, by="mag") %>% 
 #   left_join(checkm_dat, by="mag")
-
-#TODO:!!!
+#
 # If you also wanted to add the RPKM abundance values from the metagenome:
   # left_join(metag_rpkm, by="mag")
-
-
-head(rpkm_dat) %>% kable()
 ```
 
 Depending on your research question, you may want to subset your data by just the MAGs with the greatest completeness and least contamination, or by a taxonomy. Or, if you are wondering what the metabolic potential is of the entire community (well, at least the portion that was binned) you may want to aggregate the KO numbers by a taxonomic rank. 
@@ -159,14 +158,34 @@ __NOTE__: some sort of aggregation or subsetting is probably essential with `pat
 #   summarise(t_rpkm = sum(rpkm)) %>% 
 #   spread(key = mag, value = t_rpkm)
 
-# Aggregate by a taxonomy, still summing RPKM of each KO number. You could use mean() instead.
-# WE ARE GOING TO AGGREGATE BY CLASS 
-ko_rpkm <- rpkm_dat %>%
-  group_by(Class, ko) %>% 
-  summarise(t_rpkm = sum(rpkm)) %>% 
+# Aggregate by Class, and summing RPKM of each KO number. [TODO: ? You could use mean() instead.]
+lo_classes <- unique(rpkm_dat$Class)
+
+lo_rpkm_mat <- lapply(lo_classes, function(class) {
+  t_rpkm <- rpkm_dat %>%
+    dplyr::filter(Class == class) %>%
+    dplyr::group_by(Class, ko) %>% 
+    dplyr::summarise(t_rpkm = sum(rpkm)) %>% 
+    spread(key = Class, value = t_rpkm)
+    
+  pv_mat <- dplyr::select(t_rpkm, -ko)
+  rownames(pv_mat) <- t_rpkm$ko
+  return(pv_mat)
+})
+
+
+#Name each element in the list according to the class (for organization)
+names(lo_rpkm_mat) <- lo_classes
+
+#For a single pathview output that is grouped by class
+t_rpkm <- rpkm_dat %>%
+  dplyr::group_by(Class, ko) %>% 
+  dplyr::summarise(t_rpkm = sum(rpkm)) %>% 
   spread(key = Class, value = t_rpkm)
-pv_mat <- dplyr::select(ko_rpkm, -ko)
-rownames(pv_mat) <- ko_rpkm$ko
+  
+pv_mat <- dplyr::select(t_rpkm, -ko)
+rownames(pv_mat) <- t_rpkm$ko
+
 ```
 
 We will be viewing the sulfur metabolic pathway
@@ -174,7 +193,23 @@ We will be viewing the sulfur metabolic pathway
 color scale using [colorbrewer2](http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3). 
 
 ```{r, pathviewing, warning=FALSE, message=FALSE}
-# Nitrogen metabolism
+lo_classes <- unique(rpkm_dat$Class)
+
+# Sulfur metabolism pathview for each class
+lo_pv.out_class <- lapply(lo_classes, function(class) {
+  setwd(paste0("C:/Users/Shannah/OneDrive/Uni-Year-5/MICB_405/Project2/pathview_output/", class, "/"))
+  pathview(gene.data = lo_rpkm_mat[[class]],
+           limit = list(gene = c(0,10)),
+           low = list(gene = "#91bfdb"),
+           mid = list(gene = "#ffffbf"),
+           high = list(gene = "#fc8d59"),
+           species = "ko",
+           pathway.id="00920",
+           kegg.dir=".")
+  
+})
+
+#Sulfur metabolism pathview grouped by class
 pv.out <- pathview(gene.data = pv_mat,
                    limit = list(gene = c(0,10)),
                    low = list(gene = "#91bfdb"),
@@ -183,11 +218,8 @@ pv.out <- pathview(gene.data = pv_mat,
                    species = "ko",
                    pathway.id="00920",
                    kegg.dir = ".")
+
 ```
 
 
-Here is a file that pathview automatically writes to your `kegg.dir` directory.
 
-__NOTE__: If the files are not showing up in your `kegg.dir` directory, they are probably being written elsewhere on your laptop, probably in the current working directory of R. You can change this directory by using `setwd()` and providing it the path to where it should write the files.
-
-!["An example nitrogen metabolism wiring diagram derived from Saanich Inlet MAGs. There are no negative RPKM values and therefore the lowest value is 0. Vertical red bars indicate some MAGs are actively transcirbing genes involved in disimilatory nitrate reduction, denitrification and nitrification."](/home/connor/Desktop/MICB405_TAship/MICB405-Metagenomics/2018/ko00910.pathview.multi.png)

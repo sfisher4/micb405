@@ -19,10 +19,13 @@ library(tidyverse)
 ```
 
 # Data
-Load the data and put it in a format that I need for plotting
+Load the data and put it in a format that we need for plotting
 ```{r}
 
 #--- GETTING THE DATA ----
+
+########################
+# ---- Saanich Data ----
 # Load raw data
 raw_dat <- readr::read_csv("Saanich_Data.csv")
 
@@ -33,7 +36,26 @@ dat <-
   dplyr::rename(O2_uM=WS_O2, NO3_uM=WS_NO3, H2S_uM=WS_H2S) %>%
   dplyr::mutate(Depth_m=Depth*1000)
 
-# -- rpkm data --
+########################
+# ---- checkM data ----
+checkm_dat <- read.table("MetaBAT2_SaanichInlet_200m_min1500_checkM_stdout.tsv",
+                         header=TRUE,
+                         sep="\t",
+                         comment.char = '') %>% 
+  dplyr::rename(mag = Bin.Id) %>% 
+  dplyr::select(mag, Completeness, Contamination)
+
+# Due to a bug in the renaming script we have to rename the bins. Its a bit hacky but works using tidyverse functions
+metag_rpkm <- read.table("SaanichInlet_200m_binned.rpkm.csv", header=T, sep=',') %>% 
+  mutate(Sequence = gsub('m_', 'm.', Sequence)) %>% 
+  mutate(Sequence = gsub('Inlet_', 'Inlet.', Sequence)) %>% 
+  separate(col=Sequence, into=c("mag", "contig"), sep='_', extra="merge") %>% 
+  group_by(Sample, mag) %>% 
+  summarise(g_rpkm = sum(RPKM)) %>% 
+  mutate(mag = gsub('Inlet.', 'Inlet_', mag))
+
+########################
+# ---- rpkm and mag data ----
 #Read in KO Annotation tables
 ko <- read.table("SaanichInlet_MAGs_ORFs_ko.cleaned.txt") %>% 
   dplyr::rename(orf = V1) %>% 
@@ -70,51 +92,56 @@ gtdb_dat <- rbind(arc_class, bac_class) %>%
   dplyr::rename(mag = V1) %>% 
   separate(V2, sep=';', into=c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"))
 
+#We can also determine the number of Class present in our bins, and how many MAGs are representing each.
+gtdb_dat %>% 
+  group_by(Class) %>% 
+  summarise(count = n_distinct(mag)) %>% 
+  kable()
+gtdb_dat <- dplyr::select(gtdb_dat, mag, Kingdom, Phylum, Class, Order, Family)
+
 #combine all cruises and ko values
 ko_rpkm_48 <- left_join(ko, rpkm_48, by="orf") %>% 
   separate(orf, into=c("prokka_id", "orf_id")) %>% # Split the Prokka ORF names into MAG identifier and ORF
   left_join(prokka_mag_map, by="prokka_id") %>% 
-  left_join(gtdb_dat, by="mag")
+  left_join(gtdb_dat, by="mag") %>%
+  left_join(checkm_dat, by="mag") %>%
+  left_join(metag_rpkm, by="mag")
 ko_rpkm_72 <- left_join(ko, rpkm_72, by="orf") %>% 
   separate(orf, into=c("prokka_id", "orf_id")) %>% # Split the Prokka ORF names into MAG identifier and ORF
   left_join(prokka_mag_map, by="prokka_id") %>% 
-  left_join(gtdb_dat, by="mag")
+  left_join(gtdb_dat, by="mag")%>%
+  left_join(checkm_dat, by="mag") %>%
+  left_join(metag_rpkm, by="mag")
 ko_rpkm_73 <- left_join(ko, rpkm_73, by="orf") %>% 
   separate(orf, into=c("prokka_id", "orf_id")) %>% # Split the Prokka ORF names into MAG identifier and ORF
   left_join(prokka_mag_map, by="prokka_id") %>% 
-  left_join(gtdb_dat, by="mag")
+  left_join(gtdb_dat, by="mag")%>%
+  left_join(checkm_dat, by="mag") %>%
+  left_join(metag_rpkm, by="mag")
 ko_rpkm_74 <- left_join(ko, rpkm_74, by="orf") %>% 
   separate(orf, into=c("prokka_id", "orf_id")) %>% # Split the Prokka ORF names into MAG identifier and ORF
   left_join(prokka_mag_map, by="prokka_id") %>% 
-  left_join(gtdb_dat, by="mag")
+  left_join(gtdb_dat, by="mag")%>%
+  left_join(checkm_dat, by="mag") %>%
+  left_join(metag_rpkm, by="mag")
 ko_rpkm_75 <- left_join(ko, rpkm_75, by="orf") %>% 
   separate(orf, into=c("prokka_id", "orf_id")) %>% # Split the Prokka ORF names into MAG identifier and ORF
   left_join(prokka_mag_map, by="prokka_id") %>% 
-  left_join(gtdb_dat, by="mag")
+  left_join(gtdb_dat, by="mag")%>%
+  left_join(checkm_dat, by="mag") %>%
+  left_join(metag_rpkm, by="mag")
 
-#Merge all cruises except for cruise 42 (from february)
-#All cruises are from August except for Cruise 42 and b/c seasons can dramatically affect the water column AND we don't have enough data points to compare across seasons (only one from February) we are removing the February rpkm value.
-ko_rpkm <- rbind(ko_rpkm_48, ko_rpkm_73, ko_rpkm_74, ko_rpkm_75)
-
-# #Get all phylum
-# lo_phylum <- unique(ko_rpkm$Phylum)
-#
-# 
-# #add the rpkm values of rows the with same mag and ko values
-# t_rpkm <- ko_rpkm %>% 
-#   dplyr::group_by(mag, ko) %>% 
-#   dplyr::summarise(total = sum(rpkm))
-
+#combine all ko_rpkm data into one data frame
+rpkm_dat <- rbind(ko_rpkm_48, ko_rpkm_73, ko_rpkm_74, ko_rpkm_75)
+head(rpkm_dat) %>% kable()
 
 ```
 
 # Contamination vs Completeness Scatter Plot
 First I will analyse the MAGs from checkM output with rpkm abundance values
+Completeness and contamination ranges are based on quality standard definition from Bowers et al., 2017
 ```{r}
 
-#TODO: include dotted lines to show ranges
-#TODO: include the units on each axis (should be %)
-#TODO: convert contamination to percentage ?!?!
 #TODO: include a None lineage?
 #TODO: include range labels
 
@@ -127,11 +154,12 @@ bin_dat <- read_tsv(file="MetaBAT2_SaanichInlet_200m_min1500_checkM_stdout.tsv",
 bin_dat <- bin_dat %>%
   dplyr::rename('Marker_lineage' = 'Marker lineage')
 
-#Add new column with just lineage for point colors
+#Add new column with just lineage for point colors and remove bins with <10 marker genes to be assigned to a lineage (root)
 bin_dat <- bin_dat %>%
   dplyr::mutate('lineage' = gsub(".*__(*)", "\\1", Marker_lineage),
                 'lineage' = gsub("\\(|\\)", "", lineage),
-                'lineage' = gsub("UID.*", "", lineage))
+                'lineage' = gsub("UID.*", "", lineage)) %>%
+  dplyr::mutate(Marker_lineage = replace(Marker_lineage, Marker_lineage == "root (UID1)", "None"))
 
 
 #Plotting Completeness vs Contamination of MAGs at 200m
@@ -142,55 +170,70 @@ bin_dat %>%
   scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
                                 "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
                                 "#ffff99","#b15928", "#969696")) + 
-  geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") + 
-  geom_vline(xintercept = 70, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
-  geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
-  geom_hline(yintercept = 50, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
-  geom_hline(yintercept = 70, linetype = "dashed", size = 1, color = "#808080") + #TODO: check what this value is
-  geom_hline(yintercept = 90, linetype = "dashed", size = 1, color = "#808080")   #TODO: check what this value is
+  geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") +   #med completeness quality
+  geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") +   #high completeness quality
+  geom_hline(yintercept = 5, linetype = "dashed", size = 0.65, color = "#808080") +    #med contamination quality = 5-10%
+  geom_hline(yintercept = 10, linetype = "dashed", size = 0.65, color = "#808080") +   #high contamination quality = > 10%
+  xlab("Completeness (%)") +
+  ylab("Contamination (%)")
+
+#Plotting completeness vs contamination of MAGS at 200m, where contamination <=100%
+# Note: contamination above 100% indicates that the recovered bin likely contains multiple organisms. To analyze closer, this plot removes the contamination that is > 100%.
+bin_dat %>%
+  dplyr::filter(Contamination < 100) %>%
+  ggplot(aes(x=Completeness, y=Contamination, colour=lineage)) +
+  geom_point() +
+  #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
+  scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
+                                "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
+                                "#ffff99","#b15928", "#969696")) + 
+  geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080", label = "med") +   #med completeness quality
+  geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") +   #high completeness quality
+  geom_hline(yintercept = 5, linetype = "dashed", size = 1, color = "#808080") +    #med contamination quality = 5-10%
+  geom_hline(yintercept = 10, linetype = "dashed", size = 1, color = "#808080") +   #high contamination quality = > 10%
+  xlab("Completeness (%)") +
+  ylab("Contamination (%)") +
+  theme(legend.position =)
 
 ```
 
 # Bubble Plot
 Next I will create RPKM bubble-plot of each Nitrogen/Sulphur-cycling gene versus taxonomy
 ```{r}
-#Read in pathways that map to their respective ko values 
-ko00910 <- read_csv("ko_00910_values.csv")
-ko01200 <- read_csv("ko_found_in_01200.csv")
-ko00720 <- read_csv("ko_found_in_00720.csv")
-ko00920 <- read_csv("ko_found_in_00920.csv")
+#Read in sulfur pathway ko values
+# ko00920 <- read_csv("ko_found_in_00920.csv")
 
-t_rpkm <- ko_rpkm %>% 
-  mutate(ko=as.character(ko)) %>%
-  group_by(mag, ko, orf_id, Phylum) %>%
-  summarise(total_rpkm = sum(rpkm))
+#Data frame of ko values and their corresponding step in the pathway (found manually from pathview output)
+ko_to_step <- read_csv("ko-to-ec.csv") %>%
+  dplyr::rename(labels = KO)
+all_ko <- as.list(ko_to_step$labels)
 
-#Combine each pathway with the t_rpkm by ko values
-nitrogen <- dplyr::left_join(t_rpkm, ko00910, by = "ko") %>%
-  dplyr::select(-pathway) %>%
-  dplyr::filter(total_rpkm > 0)
+#read in the pathview output from sulfur pathway grouped by class (generated in pathview_by_class Rmd file)
+pv_gene_dat <- readRDS("pv_gene_dat") 
 
-#Map the ko values to the steps in the pathway (EC- Enzyme Nomenclature)
-library(httr)
-ko_ec <- lapply(nitrogen$ko, function(ko_val) {
-  r <- GET(paste0("http://rest.kegg.jp/get/ko:", ko_val))
-  result <- content(r, "parsed")
-  pos = regexpr('EC', result)
-  result <- substr(result, pos+3, nchar(result))
-  pos = regexpr('PATHWAY', result)
-  result <- substr(result, 0, pos-3)
-  result
-})
+#Filter by the ko values that were found to be involved in the pathways steps we are interested in
+pv_steps_dat <- pv_gene_dat %>% 
+  dplyr::filter(labels %in% all_ko) %>% 
+  dplyr::filter(all.mapped != "")
+pv_steps_dat <- pv_steps_dat[, -grep(".col$", colnames(pv_steps_dat))]
+pv_steps_dat$x <- NULL
+pv_steps_dat$y <- NULL
+pv_steps_dat <- unique(pv_steps_dat)
 
-nitrogen %>%
-  ggplot(aes(x=Phylum, y=orf_id, size = total_rpkm)) + 
+#Combine ko to steps in pv_steps_dat
+pv_steps_dat <- left_join(pv_steps_dat, ko_to_step, by = "labels")
+
+#wide to long format
+pv_steps_dat <- pv_steps_dat %>%
+  tidyr::gather(key = Class, value = rpkm, -c(kegg.names, labels, all.mapped, type, width, height, StepName))
+
+#Create a bubble plot
+pv_steps_dat %>%
+  ggplot(aes(x=StepName, y=Class, size = rpkm)) + 
   geom_point() + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Class vs Steps of Interest in Sulfur Metabolic Pathway")
 
-
-# bubble <- ggplot(fun_category_df, 
-#                  aes(x =sec_category  , y = sec_function , size = `Number of Patents`)) %>%
-#           + geom_point() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 ```
 
