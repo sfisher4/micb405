@@ -1,5 +1,5 @@
 ---
-title: "Pathview Aggregated by Class"
+title: "Pathview Aggregated by Order"
 author: "Shannah"
 date: "November 25, 2018"
 output: html_document
@@ -77,7 +77,7 @@ metag_rpkm <- read.table("SaanichInlet_200m_binned.rpkm.csv", header=T, sep=',')
 We can also determine the number of Phyla present in our bins, and how many MAGs are representing each. Of course, you can do this for all the taxonomic ranks. I'm also going to remove the Genus and Species fields since these are probably not relevant to your analysis (if so, then skip that step) and not very trustworthy given the whole binning procedure.
 ```{r diversity}
 gtdb_dat %>% 
-  group_by(Class) %>% 
+  group_by(Order) %>% 
   summarise(count = n_distinct(mag)) %>% 
   kable()
 gtdb_dat <- dplyr::select(gtdb_dat, mag, Kingdom, Phylum, Class, Order, Family)
@@ -158,15 +158,15 @@ __NOTE__: some sort of aggregation or subsetting is probably essential with `pat
 #   summarise(t_rpkm = sum(rpkm)) %>% 
 #   spread(key = mag, value = t_rpkm)
 
-# Aggregate by Class, and summing RPKM of each KO number. [TODO: ? You could use mean() instead.]
-lo_classes <- unique(rpkm_dat$Class)
+# Aggregate by order, and summing RPKM of each KO number. [TODO: ? You could use mean() instead.]
+lo_orders <- unique(rpkm_dat$Order)
 
-lo_rpkm_mat <- lapply(lo_classes, function(class) {
+lo_rpkm_mat <- lapply(lo_orders, function(order) {
   t_rpkm <- rpkm_dat %>%
-    dplyr::filter(Class == class) %>%
-    dplyr::group_by(Class, ko) %>% 
+    dplyr::filter(Order == order) %>%
+    dplyr::group_by(Order, ko) %>% 
     dplyr::summarise(t_rpkm = mean(rpkm)) %>% 
-    spread(key = Class, value = t_rpkm)
+    spread(key = Order, value = t_rpkm)
     
   pv_mat <- dplyr::select(t_rpkm, -ko)
   rownames(pv_mat) <- t_rpkm$ko
@@ -174,14 +174,16 @@ lo_rpkm_mat <- lapply(lo_classes, function(class) {
 })
 
 
-#Name each element in the list according to the class (for organization)
-names(lo_rpkm_mat) <- lo_classes
+#Name each element in the list according to the order (for organization)
+names(lo_rpkm_mat) <- lo_orders
 
-#For a single pathview output that is grouped by class
+#For a single pathview output that is grouped by order
+#We want to dig deeper into the prot
 t_rpkm <- rpkm_dat %>%
-  dplyr::group_by(Class, ko) %>% 
-  dplyr::summarise(t_rpkm = mean(rpkm)) %>% 
-  spread(key = Class, value = t_rpkm)
+  dplyr::filter(Class == "c__Gammaproteobacteria") %>%
+  dplyr::group_by(Order, ko) %>% 
+  dplyr::summarise(t_rpkm = mean(rpkm, na.rm=TRUE)) %>% 
+  spread(key = Order, value = t_rpkm)
   
 pv_mat <- dplyr::select(t_rpkm, -ko)
 rownames(pv_mat) <- t_rpkm$ko
@@ -193,23 +195,23 @@ We will be viewing the sulfur metabolic pathway
 color scale using [colorbrewer2](http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3). 
 
 ```{r, pathviewing, warning=FALSE, message=FALSE}
-lo_classes <- unique(rpkm_dat$Class)
+lo_orders <- unique(rpkm_dat$Order)
 
-# Sulfur metabolism pathview for each class
-lo_pv.out_class <- lapply(lo_classes, function(class) {
-  setwd(paste0("C:/Users/Shannah/OneDrive/Uni-Year-5/MICB_405/Project2/pathview_output/", class, "/"))
-  pathview(gene.data = lo_rpkm_mat[[class]],
-           limit = list(gene = c(0,10)),
-           low = list(gene = "#91bfdb"),
-           mid = list(gene = "#ffffbf"),
-           high = list(gene = "#fc8d59"),
-           species = "ko",
-           pathway.id="00920",
-           kegg.dir=".")
+# Sulfur metabolism pathview for each order
+# lo_pv.out_order <- lapply(lo_orders, function(order) {
+  # setwd(paste0("C:/Users/Shannah/OneDrive/Uni-Year-5/MICB_405/Project2/pathview_output/", order, "/"))
+  # pathview(gene.data = lo_rpkm_mat[[]],
+  #          limit = list(gene = c(0,10)),
+  #          low = list(gene = "#91bfdb"),
+  #          mid = list(gene = "#ffffbf"),
+  #          high = list(gene = "#fc8d59"),
+  #          species = "ko",
+  #          pathway.id="00920",
+  #          kegg.dir=".")
   
-})
+# })
 
-#Sulfur metabolism pathview grouped by class
+#Sulfur metabolism pathview grouped by order
 pv.out <- pathview(gene.data = pv_mat,
                    limit = list(gene = c(0,10)),
                    low = list(gene = "#91bfdb"),
@@ -218,6 +220,7 @@ pv.out <- pathview(gene.data = pv_mat,
                    species = "ko",
                    pathway.id="00920",
                    kegg.dir = ".")
+saveRDS(pv.out$plot.data.gene, "gamma_pv_out.rds")
 
 ```
 

@@ -14,8 +14,70 @@ library(tidyr)
 library(dplyr)
 library(pathview)
 library(tidyverse)
+library(knitr)
+library(ggthemes)
+library(grid)
 
-#If come across negative vector error then you should subset your data (for ex. by proteobar)
+```
+
+```{r}
+#Before we get started, I am going to load a function to create a theme from https://rpubs.com/Koundy/71792, which is a nice theme that I will use throughout the rest of the plots.
+
+theme_Publication <- function(base_size=12, base_family="helvetica") {
+      (theme_foundation(base_size=base_size, base_family=base_family)
+       + theme(plot.title = element_text(face = "bold",
+                                         size = rel(1.2), hjust = 0.5),
+               text = element_text(),
+               panel.background = element_rect(colour = NA),
+               plot.background = element_rect(colour = NA),
+               panel.border = element_rect(colour = NA),
+               axis.title = element_text(face = "bold"), #,size = rel(1)
+               axis.title.y = element_text(angle=90,vjust =2),
+               axis.title.x = element_text(vjust = -0.2),
+               axis.text = element_text(), 
+               axis.line = element_line(colour="black"),
+               axis.ticks = element_line(),
+               panel.grid.major = element_line(colour="#f0f0f0"),
+               panel.grid.minor = element_blank(),
+               legend.key = element_rect(colour = NA),
+               legend.position = "bottom",
+               legend.direction = "horizontal",
+               legend.key.size= unit(0.2, "cm"),
+               legend.margin = unit(0, "cm"),
+               legend.title = element_text(face="italic"),
+               plot.margin=unit(c(10,5,5,5),"mm"),
+               strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+               strip.text = element_text(face="bold")
+          ))
+      
+}
+
+theme_Publication_legend_side <- function(base_size=12, base_family="helvetica") {
+      (theme_foundation(base_size=base_size, base_family=base_family)
+       + theme(plot.title = element_text(face = "bold",
+                                         size = rel(1.2), hjust = 0.5),
+               text = element_text(),
+               panel.background = element_rect(colour = NA),
+               plot.background = element_rect(colour = NA),
+               panel.border = element_rect(colour = NA),
+               axis.title = element_text(face = "bold"), #,size = rel(1)
+               axis.title.y = element_text(angle=90,vjust =2),
+               axis.title.x = element_text(vjust = -0.2),
+               axis.text = element_text(), 
+               axis.line = element_line(colour="black"),
+               axis.ticks = element_line(),
+               panel.grid.major = element_line(colour="#f0f0f0"),
+               panel.grid.minor = element_blank(),
+               legend.key = element_rect(colour = NA),
+               legend.key.size= unit(0.2, "cm"),
+               legend.margin = unit(0, "cm"),
+               legend.title = element_text(face="italic"),
+               plot.margin=unit(c(10,5,5,5),"mm"),
+               strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+               strip.text = element_text(face="bold")
+          ))
+      
+}
 ```
 
 # Data
@@ -51,7 +113,7 @@ metag_rpkm <- read.table("SaanichInlet_200m_binned.rpkm.csv", header=T, sep=',')
   mutate(Sequence = gsub('Inlet_', 'Inlet.', Sequence)) %>% 
   separate(col=Sequence, into=c("mag", "contig"), sep='_', extra="merge") %>% 
   group_by(Sample, mag) %>% 
-  summarise(g_rpkm = sum(RPKM)) %>% 
+  summarise(g_rpkm = mean(RPKM)) %>% 
   mutate(mag = gsub('Inlet.', 'Inlet_', mag))
 
 ########################
@@ -94,9 +156,9 @@ gtdb_dat <- rbind(arc_class, bac_class) %>%
 
 #We can also determine the number of Class present in our bins, and how many MAGs are representing each.
 gtdb_dat %>% 
-  group_by(Class) %>% 
+  group_by(Order) %>% 
   summarise(count = n_distinct(mag)) %>% 
-  kable()
+  knitr::kable()
 gtdb_dat <- dplyr::select(gtdb_dat, mag, Kingdom, Phylum, Class, Order, Family)
 
 #combine all cruises and ko values
@@ -133,7 +195,7 @@ ko_rpkm_75 <- left_join(ko, rpkm_75, by="orf") %>%
 
 #combine all ko_rpkm data into one data frame
 rpkm_dat <- rbind(ko_rpkm_48, ko_rpkm_73, ko_rpkm_74, ko_rpkm_75)
-head(rpkm_dat) %>% kable()
+head(rpkm_dat) %>% knitr::kable()
 
 ```
 
@@ -175,7 +237,10 @@ bin_dat %>%
   geom_hline(yintercept = 5, linetype = "dashed", size = 0.65, color = "#808080") +    #med contamination quality = 5-10%
   geom_hline(yintercept = 10, linetype = "dashed", size = 0.65, color = "#808080") +   #high contamination quality = > 10%
   xlab("Completeness (%)") +
-  ylab("Contamination (%)")
+  ylab("Contamination (%)") +
+  theme_Publication() + 
+  guides(color=guide_legend(nrow=5)) 
+  # labs(title="Completeness vs Contamination by Lineage")
 
 #Plotting completeness vs contamination of MAGS at 200m, where contamination <=100%
 # Note: contamination above 100% indicates that the recovered bin likely contains multiple organisms. To analyze closer, this plot removes the contamination that is > 100%.
@@ -187,19 +252,43 @@ bin_dat %>%
   scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
                                 "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
                                 "#ffff99","#b15928", "#969696")) + 
-  geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080", label = "med") +   #med completeness quality
+  #-- LOW COMPLETENESS--
+  annotate("text", x=25, y=100, label="Low", 
+            colour="black", text=element_text(size=9, family="Helvetica")) +
+  geom_segment(aes(x = 49, y = 96, xend = 1, yend = 96),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  #-- MED COMPLETENESS--
+  geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") +   #med completeness quality
+  annotate("text", x=70, y=100, label="Medium", 
+            colour="black", text=element_text(size=9, family="Helvetica")) +
+  geom_segment(aes(x = 51, y = 96, xend = 89, yend = 96),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  geom_segment(aes(x = 89, y = 96, xend = 51, yend = 96),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  #-- HIGH COMPLETENESS --
   geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") +   #high completeness quality
+  annotate("text", x=95, y=100, label="High", 
+            colour="black", text=element_text(size=9, family="Helvetica")) +
+  geom_segment(aes(x = 91, y = 96, xend = 100, yend = 96),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  #-- LOW CONTAMINATION --
+  annotate("text", x=95, y=100, label="High", 
+            colour="black", text=element_text(size=9, family="Helvetica")) +
+  #-- MED CONTAMINATION --
   geom_hline(yintercept = 5, linetype = "dashed", size = 1, color = "#808080") +    #med contamination quality = 5-10%
   geom_hline(yintercept = 10, linetype = "dashed", size = 1, color = "#808080") +   #high contamination quality = > 10%
   xlab("Completeness (%)") +
   ylab("Contamination (%)") +
-  theme(legend.position =)
+  theme_Publication() + 
+  guides(color=guide_legend(nrow=5)) 
+  # labs(title="Completeness vs Contamination by Lineage")
 
 ```
 
 # Bubble Plot
-Next I will create RPKM bubble-plot of each Nitrogen/Sulphur-cycling gene versus taxonomy
+Next I will create RPKM bubble-plot of each Sulphur-cycling gene versus taxonomy
 ```{r}
+#TODO: add category stripe of phylum
 #Read in sulfur pathway ko values
 # ko00920 <- read_csv("ko_found_in_00920.csv")
 
@@ -209,7 +298,8 @@ ko_to_step <- read_csv("ko-to-ec.csv") %>%
 all_ko <- as.list(ko_to_step$labels)
 
 #read in the pathview output from sulfur pathway grouped by class (generated in pathview_by_class Rmd file)
-pv_gene_dat <- readRDS("pv_gene_dat") 
+# pv_gene_dat <- readRDS("pv_gene_dat")
+pv_gene_dat <- readRDS("pv_out_mean.rds")
 
 #Filter by the ko values that were found to be involved in the pathways steps we are interested in
 pv_steps_dat <- pv_gene_dat %>% 
@@ -218,6 +308,7 @@ pv_steps_dat <- pv_gene_dat %>%
 pv_steps_dat <- pv_steps_dat[, -grep(".col$", colnames(pv_steps_dat))]
 pv_steps_dat$x <- NULL
 pv_steps_dat$y <- NULL
+names(pv_steps_dat)[names(pv_steps_dat) == 'c__'] <- 'c__Unknown'
 pv_steps_dat <- unique(pv_steps_dat)
 
 #Combine ko to steps in pv_steps_dat
@@ -229,10 +320,82 @@ pv_steps_dat <- pv_steps_dat %>%
 
 #Create a bubble plot
 pv_steps_dat %>%
-  ggplot(aes(x=StepName, y=Class, size = rpkm)) + 
+  mutate(Class = gsub("c__", "", Class)) %>%
+  ggplot(aes(x=StepName, y=Class, size = rpkm, color = rpkm)) + 
   geom_point() + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(title = "Class vs Steps of Interest in Sulfur Metabolic Pathway")
+  # labs(title = "Class vs Steps of Interest in Sulfur Metabolic Pathway") +
+  scale_color_gradientn(limits = c(0,5),
+                        colours = c("#8c2d04",  "#cc4c02","#ec7014", "#fe9929", "#fec44f", "#fee391"),
+                        breaks = c(0,1,2,3,4,5),
+                        guide = guide_colorbar(barwidth = 1, barheight = 5)) +
+  theme_Publication_legend_side() +
+  scale_size(range=c(2, 6)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+```
+
+# Bubble Plot from gamma proteobacteria
+Next I will create RPKM bubble-plot of each Nitrogen/Sulphur-cycling gene versus taxonomy
+```{r}
+#TODO: add category stripe of phylum
+#Read in sulfur pathway ko values
+# ko00920 <- read_csv("ko_found_in_00920.csv")
+
+#Data frame of ko values and their corresponding step in the pathway (found manually from pathview output)
+ko_to_step <- read_csv("ko-to-ec.csv") %>%
+  dplyr::rename(labels = KO)
+all_ko <- as.list(ko_to_step$labels)
+
+#read in the pathview output from sulfur pathway grouped by class (generated in pathview_by_class Rmd file)
+# pv_gene_dat <- readRDS("pv_gene_dat")
+pv_gene_dat <- readRDS("gamma_pv_out.rds")
+
+#Filter by the ko values that were found to be involved in the pathways steps we are interested in
+pv_steps_dat <- pv_gene_dat %>% 
+  dplyr::filter(labels %in% all_ko) %>% 
+  dplyr::filter(all.mapped != "")
+pv_steps_dat <- pv_steps_dat[, -grep(".col$", colnames(pv_steps_dat))]
+pv_steps_dat$x <- NULL
+pv_steps_dat$y <- NULL
+names(pv_steps_dat)[names(pv_steps_dat) == 'o__'] <- 'o__Unknown'
+pv_steps_dat <- unique(pv_steps_dat)
+
+#Combine ko to steps in pv_steps_dat
+pv_steps_dat <- left_join(pv_steps_dat, ko_to_step, by = "labels")
+
+#wide to long format
+pv_steps_dat <- pv_steps_dat %>%
+  tidyr::gather(key = Order, value = rpkm, -c(kegg.names, labels, all.mapped, type, width, height, StepName))
+
+#Create a bubble plot
+pv_steps_dat %>%
+  mutate(Order = gsub("o__", "", Order)) %>%
+  ggplot(aes(x=StepName, y=Order)) + 
+  geom_point(aes(size = rpkm, color=rpkm)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  # labs(title = "Order of Gammaproteobacteria vs Steps in Sulfur Metabolic Pathway") +
+  scale_color_gradientn(limits = c(0,5),
+                        colours = c("#8c2d04",  "#cc4c02","#ec7014", "#fe9929", "#fec44f", "#fee391"),
+                        # colours = c("#d53e4f", "#fc8d59", "#fee08b", "#e6f598", "#99d594","#3288bd"), 
+                        # colours = c("#ffffcc", "#c7e9b4", "#7fcdbb", "#41b6c4", "#2c7fb8", "#253494"),
+                        breaks = c(0,1,2,3,4,5),
+                        guide = guide_colorbar(barwidth = 1, barheight = 5)) +
+  theme_Publication_legend_side() +
+  scale_size(range=c(2, 6)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(margin = margin(t = 10)),
+        legend.spacing.y = unit(0.5, 'cm')) 
+  # guides(color = guide_legend("title"))
+  # xlab()
+  # theme_Publication()
+                     # breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                     # limits = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+  # breaks = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"),
+  #                    values = c("#E52100","#E16400","#DDA400","#CFD900",
+  #                               "#8CD500","#4AD200","#0BCE00","#00C66C",
+  #                               "#00C2A4","#00A2BF")
 
 
 ```
