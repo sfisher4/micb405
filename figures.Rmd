@@ -23,8 +23,8 @@ library(grid)
 ```{r}
 #Before we get started, I am going to load a function to create a theme from https://rpubs.com/Koundy/71792, which is a nice theme that I will use throughout the rest of the plots.
 
-theme_Publication <- function(base_size=12, base_family="helvetica") {
-      (theme_foundation(base_size=base_size, base_family=base_family)
+theme_Publication <- function(base_size=12) {
+      (theme_foundation(base_size=base_size)
        + theme(plot.title = element_text(face = "bold",
                                          size = rel(1.2), hjust = 0.5),
                text = element_text(),
@@ -52,8 +52,8 @@ theme_Publication <- function(base_size=12, base_family="helvetica") {
       
 }
 
-theme_Publication_legend_side <- function(base_size=12, base_family="helvetica") {
-      (theme_foundation(base_size=base_size, base_family=base_family)
+theme_Publication_legend_side <- function(base_size=12) {
+      (theme_foundation(base_size=base_size)
        + theme(plot.title = element_text(face = "bold",
                                          size = rel(1.2), hjust = 0.5),
                text = element_text(),
@@ -69,6 +69,34 @@ theme_Publication_legend_side <- function(base_size=12, base_family="helvetica")
                panel.grid.major = element_line(colour="#f0f0f0"),
                panel.grid.minor = element_blank(),
                legend.key = element_rect(colour = NA),
+               legend.key.size= unit(0.2, "cm"),
+               legend.margin = unit(0, "cm"),
+               legend.title = element_text(face="italic"),
+               plot.margin=unit(c(10,5,5,5),"mm"),
+               strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+               strip.text = element_text(face="bold")
+          ))
+      
+}
+
+theme_Publication_facets <- function(base_size=12) {
+      (theme_foundation(base_size=base_size)
+       + theme(plot.title = element_text(face = "bold",
+                                         size = rel(1.2), hjust = 0.5),
+               text = element_text(),
+               panel.background = element_rect(colour = NA),
+               plot.background = element_rect(colour = NA),
+               axis.title = element_text(face = "bold"), #,size = rel(1)
+               axis.title.y = element_text(angle=90,vjust =2),
+               axis.title.x = element_text(vjust = -0.2),
+               axis.text = element_text(), 
+               axis.line = element_line(colour="black"),
+               axis.ticks = element_line(),
+               panel.grid.major = element_line(colour="#f0f0f0"),
+               panel.grid.minor = element_blank(),
+               legend.key = element_rect(colour = NA),
+               legend.position = "bottom",
+               legend.direction = "horizontal",
                legend.key.size= unit(0.2, "cm"),
                legend.margin = unit(0, "cm"),
                legend.title = element_text(face="italic"),
@@ -114,7 +142,8 @@ metag_rpkm <- read.table("SaanichInlet_200m_binned.rpkm.csv", header=T, sep=',')
   separate(col=Sequence, into=c("mag", "contig"), sep='_', extra="merge") %>% 
   group_by(Sample, mag) %>% 
   summarise(g_rpkm = mean(RPKM)) %>% 
-  mutate(mag = gsub('Inlet.', 'Inlet_', mag))
+  mutate(mag = gsub('Inlet.', 'Inlet_', mag)) 
+  # dplyr::filter(Sample != "SI042_200m")
 
 ########################
 # ---- rpkm and mag data ----
@@ -207,60 +236,54 @@ Completeness and contamination ranges are based on quality standard definition f
 #TODO: include a None lineage?
 #TODO: include range labels
 
-#Probably want to include as many MAGs as possible because we are wanting to fill in a pathway
+rpkm_dat <- left_join(metag_rpkm, checkm_dat, by="mag") %>% 
+  left_join(gtdb_dat, by="mag") %>% 
+  group_by(mag, Kingdom, Phylum, Class, Completeness, Contamination) %>% 
+  summarise(g_rpkm = mean(g_rpkm))
 
-#Load .tsv file from MetaBAT2 to dat
-bin_dat <- read_tsv(file="MetaBAT2_SaanichInlet_200m_min1500_checkM_stdout.tsv", col_names = TRUE)
-
-#Rename Marker lineage so it's one string (makes it easier later)
-bin_dat <- bin_dat %>%
-  dplyr::rename('Marker_lineage' = 'Marker lineage')
-
-#Add new column with just lineage for point colors and remove bins with <10 marker genes to be assigned to a lineage (root)
-bin_dat <- bin_dat %>%
-  dplyr::mutate('lineage' = gsub(".*__(*)", "\\1", Marker_lineage),
-                'lineage' = gsub("\\(|\\)", "", lineage),
-                'lineage' = gsub("UID.*", "", lineage)) %>%
-  dplyr::mutate(Marker_lineage = replace(Marker_lineage, Marker_lineage == "root (UID1)", "None"))
-
-
+#-- PLOT WITH ALL OF THE DATA! --
 #Plotting Completeness vs Contamination of MAGs at 200m
-bin_dat %>%
-  ggplot(aes(x=Completeness, y=Contamination, colour=lineage)) +
+rpkm_dat %>%
+  ggplot(aes(x=Completeness, y=Contamination, col=Class)) +
+  # scale_size(range = c(1,10)) +
+  # xlim(c(50,100)) +
+  # ylim(c(0,100)) +
   geom_point() +
   #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
-  scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
-                                "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
-                                "#ffff99","#b15928", "#969696")) + 
+  # scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
+                                # "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
+                                # "#ffff99","#b15928", "#969696")) + 
   geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") +   #med completeness quality
   geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") +   #high completeness quality
   geom_hline(yintercept = 5, linetype = "dashed", size = 0.65, color = "#808080") +    #med contamination quality = 5-10%
   geom_hline(yintercept = 10, linetype = "dashed", size = 0.65, color = "#808080") +   #high contamination quality = > 10%
   xlab("Completeness (%)") +
   ylab("Contamination (%)") +
-  theme_Publication() + 
-  guides(color=guide_legend(nrow=5)) 
-  # labs(title="Completeness vs Contamination by Lineage")
+  theme_Publication_legend_side() 
+  # guides(color=guide_legend(nrow=5)) 
+    # labs(title="Completeness vs Contamination by Lineage")
 
+#-- PLOT WITH CONTAMINATION <= 100%! --
 #Plotting completeness vs contamination of MAGS at 200m, where contamination <=100%
 # Note: contamination above 100% indicates that the recovered bin likely contains multiple organisms. To analyze closer, this plot removes the contamination that is > 100%.
-bin_dat %>%
+rpkm_dat %>%
   dplyr::filter(Contamination < 100) %>%
-  ggplot(aes(x=Completeness, y=Contamination, colour=lineage)) +
-  geom_point() +
+  # dplyr::filter(Completeness > 50) %>%
+  ggplot(aes(x=Completeness, y=Contamination, colour=Class)) +
+  geom_point(aes(size=g_rpkm)) +
   #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
-  scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
-                                "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
-                                "#ffff99","#b15928", "#969696")) + 
+  # scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
+                                # "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
+                                # "#ffff99","#b15928", "#969696")) + 
   #-- LOW COMPLETENESS--
   annotate("text", x=25, y=100, label="Low", 
-            colour="black", text=element_text(size=9, family="Helvetica")) +
+            colour="black", text=element_text(size=9, family="Arial")) +
   geom_segment(aes(x = 49, y = 96, xend = 1, yend = 96),
                   arrow = arrow(length = unit(0.25, "cm")), colour="black")+
   #-- MED COMPLETENESS--
   geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") +   #med completeness quality
   annotate("text", x=70, y=100, label="Medium", 
-            colour="black", text=element_text(size=9, family="Helvetica")) +
+            colour="black", text=element_text(size=9, family="Arial")) +
   geom_segment(aes(x = 51, y = 96, xend = 89, yend = 96),
                   arrow = arrow(length = unit(0.25, "cm")), colour="black")+
   geom_segment(aes(x = 89, y = 96, xend = 51, yend = 96),
@@ -268,20 +291,79 @@ bin_dat %>%
   #-- HIGH COMPLETENESS --
   geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") +   #high completeness quality
   annotate("text", x=95, y=100, label="High", 
-            colour="black", text=element_text(size=9, family="Helvetica")) +
+            colour="black", text=element_text(size=9, family="Arial")) +
   geom_segment(aes(x = 91, y = 96, xend = 100, yend = 96),
                   arrow = arrow(length = unit(0.25, "cm")), colour="black")+
   #-- LOW CONTAMINATION --
-  annotate("text", x=95, y=100, label="High", 
-            colour="black", text=element_text(size=9, family="Helvetica")) +
+  annotate("text", x=110, y=0, label="Low", #angle=270,
+            colour="black", text=element_text(size=9, family="Arial")) +
+  geom_segment(aes(x = 105, y = 0, xend = 105, yend = 5),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
   #-- MED CONTAMINATION --
-  geom_hline(yintercept = 5, linetype = "dashed", size = 1, color = "#808080") +    #med contamination quality = 5-10%
+  annotate("text", x=110, y=8, label="Med", #angle=270,
+            colour="black", text=element_text(size=9, family="Arial")) +
+  geom_segment(aes(x = 105, y = 5, xend = 105, yend = 10),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  geom_hline(yintercept = 5, linetype = "dashed", size = 1, color = "#808080") +    #med contamination quality = 5-10
+  annotate("text", x=110, y=50, label="High", #angle=270,
+            colour="black", text=element_text(size=9, family="Arial")) +
+  geom_segment(aes(x = 105, y = 10, xend = 105, yend = 100),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
   geom_hline(yintercept = 10, linetype = "dashed", size = 1, color = "#808080") +   #high contamination quality = > 10%
   xlab("Completeness (%)") +
   ylab("Contamination (%)") +
-  theme_Publication() + 
-  guides(color=guide_legend(nrow=5)) 
+  theme_Publication_legend_side()
+  # guides(color=guide_legend(nrow=5)) 
   # labs(title="Completeness vs Contamination by Lineage")
+
+# ----- PLOT WITH ONLY THE DATA WE ARE GOING TO ANALYSE -----
+#This includes the medium-high quality MAGS at depth 200 and the cruises: 48, 72, 73. 74, and 75
+# We are not analyzing Cruise 42, even though we have access to it because all other cruises came from August and cruise 42 came from february. We know that seasons can affect the compostion and we didn't have enough data points to generalize for other seasons than summer (August)
+
+rpkm_dat %>%
+  dplyr::filter(Contamination <= 10) %>%
+  dplyr::filter(Completeness > 50) %>%
+  ggplot(aes(x=Completeness, y=Contamination, colour=Class)) +
+  geom_point(aes(size=g_rpkm)) +
+  #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
+  # scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
+                                # "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
+                                # "#ffff99","#b15928", "#969696")) + 
+  #-- MED COMPLETENESS--
+  geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") +   #med completeness quality
+  annotate("text", x=70, y=12, label="Medium", 
+            colour="black", text=element_text(size=9, family="Arial")) +
+  geom_segment(aes(x = 51, y = 11, xend = 89, yend = 11),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  geom_segment(aes(x = 89, y = 11, xend = 51, yend = 11),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  #-- HIGH COMPLETENESS --
+  geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") +   #high completeness quality
+  annotate("text", x=95, y=12, label="High", 
+            colour="black", text=element_text(size=9, family="Arial")) +
+  geom_segment(aes(x = 91, y = 11, xend = 100, yend = 11),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  geom_segment(aes(x = 100, y = 11, xend = 91, yend = 11),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  #-- LOW CONTAMINATION --
+  annotate("text", x=104, y=2.5, label="Low", #angle=270,
+            colour="black", text=element_text(size=9, family="Arial")) +
+  geom_segment(aes(x = 101, y = 0, xend = 101, yend = 4.8),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  geom_segment(aes(x = 101, y = 4.8, xend = 101, yend = 0),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  #-- MED CONTAMINATION --
+  annotate("text", x=104, y=8, label="Med", #angle=270,
+            colour="black", text=element_text(size=9, family="Arial")) +
+  geom_segment(aes(x = 101, y = 5.2, xend = 101, yend = 10),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  geom_segment(aes(x = 101, y = 10, xend = 101, yend = 5.2),
+                  arrow = arrow(length = unit(0.25, "cm")), colour="black")+
+  geom_hline(yintercept = 5, linetype = "dashed", size = 1, color = "#808080") +    #med contamination quality = 5-10
+  xlab("Completeness (%)") +
+  ylab("Contamination (%)") +
+  theme_Publication_legend_side() 
+  # guides(color=guide_legend(nrow=5)) 
 
 ```
 
@@ -289,34 +371,21 @@ bin_dat %>%
 Next I will create RPKM bubble-plot of each Sulphur-cycling gene versus taxonomy
 ```{r}
 #TODO: add category stripe of phylum
-#Read in sulfur pathway ko values
-# ko00920 <- read_csv("ko_found_in_00920.csv")
 
 #Data frame of ko values and their corresponding step in the pathway (found manually from pathview output)
-ko_to_step <- read_csv("ko-to-ec.csv") %>%
-  dplyr::rename(labels = KO)
-all_ko <- as.list(ko_to_step$labels)
+ko_to_step <- read_csv("KO-StepName-Mapping.csv")
 
 #read in the pathview output from sulfur pathway grouped by class (generated in pathview_by_class Rmd file)
-# pv_gene_dat <- readRDS("pv_gene_dat")
 pv_gene_dat <- readRDS("pv_out_mean.rds")
 
 #Filter by the ko values that were found to be involved in the pathways steps we are interested in
-pv_steps_dat <- pv_gene_dat %>% 
-  dplyr::filter(labels %in% all_ko) %>% 
-  dplyr::filter(all.mapped != "")
+pv_steps_dat <- dplyr::inner_join(pv_gene_dat, ko_to_step)
 pv_steps_dat <- pv_steps_dat[, -grep(".col$", colnames(pv_steps_dat))]
-pv_steps_dat$x <- NULL
-pv_steps_dat$y <- NULL
 names(pv_steps_dat)[names(pv_steps_dat) == 'c__'] <- 'c__Unknown'
-pv_steps_dat <- unique(pv_steps_dat)
-
-#Combine ko to steps in pv_steps_dat
-pv_steps_dat <- left_join(pv_steps_dat, ko_to_step, by = "labels")
 
 #wide to long format
 pv_steps_dat <- pv_steps_dat %>%
-  tidyr::gather(key = Class, value = rpkm, -c(kegg.names, labels, all.mapped, type, width, height, StepName))
+  tidyr::gather(key = Class, value = rpkm, -c(kegg.names, labels, KO, all.mapped, type, width, height, StepName, x, y))
 
 #Create a bubble plot
 pv_steps_dat %>%
@@ -326,12 +395,14 @@ pv_steps_dat %>%
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   # labs(title = "Class vs Steps of Interest in Sulfur Metabolic Pathway") +
   scale_color_gradientn(limits = c(0,5),
-                        colours = c("#8c2d04",  "#cc4c02","#ec7014", "#fe9929", "#fec44f", "#fee391"),
+                        colours = c("#b10026",  "#e31a1c","#fc4e2a", "#fd8d3c", "#feb24c", "#fed976"),
                         breaks = c(0,1,2,3,4,5),
                         guide = guide_colorbar(barwidth = 1, barheight = 5)) +
   theme_Publication_legend_side() +
   scale_size(range=c(2, 6)) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(margin = margin(t = 10)),
+        legend.spacing.y = unit(0.5, 'cm')) 
 
 
 ```
@@ -340,34 +411,21 @@ pv_steps_dat %>%
 Next I will create RPKM bubble-plot of each Nitrogen/Sulphur-cycling gene versus taxonomy
 ```{r}
 #TODO: add category stripe of phylum
-#Read in sulfur pathway ko values
-# ko00920 <- read_csv("ko_found_in_00920.csv")
 
 #Data frame of ko values and their corresponding step in the pathway (found manually from pathview output)
-ko_to_step <- read_csv("ko-to-ec.csv") %>%
-  dplyr::rename(labels = KO)
-all_ko <- as.list(ko_to_step$labels)
+ko_to_step <- read_csv("KO-StepName-Mapping.csv")
 
 #read in the pathview output from sulfur pathway grouped by class (generated in pathview_by_class Rmd file)
-# pv_gene_dat <- readRDS("pv_gene_dat")
 pv_gene_dat <- readRDS("gamma_pv_out.rds")
 
 #Filter by the ko values that were found to be involved in the pathways steps we are interested in
-pv_steps_dat <- pv_gene_dat %>% 
-  dplyr::filter(labels %in% all_ko) %>% 
-  dplyr::filter(all.mapped != "")
+pv_steps_dat <- dplyr::inner_join(pv_gene_dat, ko_to_step)
 pv_steps_dat <- pv_steps_dat[, -grep(".col$", colnames(pv_steps_dat))]
-pv_steps_dat$x <- NULL
-pv_steps_dat$y <- NULL
 names(pv_steps_dat)[names(pv_steps_dat) == 'o__'] <- 'o__Unknown'
-pv_steps_dat <- unique(pv_steps_dat)
-
-#Combine ko to steps in pv_steps_dat
-pv_steps_dat <- left_join(pv_steps_dat, ko_to_step, by = "labels")
 
 #wide to long format
 pv_steps_dat <- pv_steps_dat %>%
-  tidyr::gather(key = Order, value = rpkm, -c(kegg.names, labels, all.mapped, type, width, height, StepName))
+  tidyr::gather(key = Order, value = rpkm, -c(kegg.names, labels, KO, all.mapped, type, width, height, StepName, x, y))
 
 #Create a bubble plot
 pv_steps_dat %>%
@@ -377,9 +435,7 @@ pv_steps_dat %>%
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   # labs(title = "Order of Gammaproteobacteria vs Steps in Sulfur Metabolic Pathway") +
   scale_color_gradientn(limits = c(0,5),
-                        colours = c("#8c2d04",  "#cc4c02","#ec7014", "#fe9929", "#fec44f", "#fee391"),
-                        # colours = c("#d53e4f", "#fc8d59", "#fee08b", "#e6f598", "#99d594","#3288bd"), 
-                        # colours = c("#ffffcc", "#c7e9b4", "#7fcdbb", "#41b6c4", "#2c7fb8", "#253494"),
+                        colours = c("#b10026",  "#e31a1c","#fc4e2a", "#fd8d3c", "#feb24c", "#fed976"),
                         breaks = c(0,1,2,3,4,5),
                         guide = guide_colorbar(barwidth = 1, barheight = 5)) +
   theme_Publication_legend_side() +
@@ -387,15 +443,6 @@ pv_steps_dat %>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.text = element_text(margin = margin(t = 10)),
         legend.spacing.y = unit(0.5, 'cm')) 
-  # guides(color = guide_legend("title"))
-  # xlab()
-  # theme_Publication()
-                     # breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                     # limits = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-  # breaks = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"),
-  #                    values = c("#E52100","#E16400","#DDA400","#CFD900",
-  #                               "#8CD500","#4AD200","#0BCE00","#00C66C",
-  #                               "#00C2A4","#00A2BF")
 
 
 ```
@@ -414,18 +461,82 @@ dat <-
          WS_O2, WS_NO3, WS_H2S) %>%
   dplyr::filter(!is.na(WS_O2)) %>%
   dplyr::rename(O2_uM=WS_O2, NO3_uM=WS_NO3, H2S_uM=WS_H2S) %>%
-  dplyr::mutate(Depth_m=Depth*1000)
+  dplyr::mutate(Depth_m=Depth*1000) %>%
+  dplyr::filter(Cruise %in% c(48, 72, 73, 74, 75)) #Only take from the relevant cruises
 
-
+###############
+# -- First let's look at all of the depths, so we can get a high level picture of the concentration changes with depth --
 #want to create a plot with all 3 variables as x axis and depth as y with shape as type
 #can manipulate data frame to do so
 dat %>%
   dplyr::select(Depth_m, H2S_uM, NO3_uM, O2_uM) %>%
   gather(key = "Chemical", value = "Concentration", -Depth_m) %>%
   ggplot() +
-  geom_point(aes(x=Concentration, y=Depth_m, shape=Chemical, colour=Chemical))
+  geom_point(aes(x=Concentration, y=Depth_m, colour=Chemical)) +
+  scale_y_reverse() +
+  expand_limits(y=0) +
+  theme_Publication() +
+  scale_color_manual(values=c("#e41a1c", "#377eb8", "#4daf4a"))
+
+# -- Now let's facet to get a better look --
+dat %>%
+  dplyr::select(Depth_m, H2S_uM, NO3_uM, O2_uM) %>%
+  gather(key = "Chemical", value = "Concentration", -Depth_m) %>%
+  ggplot() +
+  geom_point(aes(x=Concentration, y=Depth_m, colour=Chemical)) +
+  scale_y_reverse() +
+  expand_limits(y=0) +
+  theme_Publication_facets() +
+  scale_color_manual(values=c("#e41a1c", "#377eb8", "#4daf4a")) +
+  facet_wrap(facets = vars(Chemical))
+
+
+###############
+# -- Next let's zoom into depth 200 --
+
+#Normal
+dat %>%
+  dplyr::select(Depth_m, H2S_uM, NO3_uM, O2_uM) %>%
+  dplyr::filter(Depth_m > 150) %>%
+  dplyr::filter(Depth_m <= 200) %>%
+  gather(key = "Chemical", value = "Concentration", -Depth_m) %>%
+  ggplot() +
+  geom_point(aes(x=Concentration, y=Depth_m, colour=Chemical)) +
+  scale_y_reverse() +
+  expand_limits(y=150) +
+  theme_Publication() +
+  scale_color_manual(values=c("#e41a1c", "#377eb8", "#4daf4a"))
+
+#facet
+dat %>%
+  dplyr::select(Depth_m, H2S_uM, NO3_uM, O2_uM) %>%
+  dplyr::filter(Depth_m > 150) %>%
+  dplyr::filter(Depth_m <= 200) %>%
+  gather(key = "Chemical", value = "Concentration", -Depth_m) %>%
+  ggplot() +
+  geom_point(aes(x=Concentration, y=Depth_m, colour=Chemical)) +
+  scale_y_reverse() +
+  expand_limits(y=150) +
+  theme_Publication_facets() +
+  scale_color_manual(values=c("#e41a1c", "#377eb8", "#4daf4a")) +
+  facet_wrap(facets = vars(Chemical))
   
 
 ```
 
+For this next plot, we will determine the relative abundance of these MAGs across the different cruises and time points. We don't want to use the mean RPKM value across the cruises so we are going to create a new dataframe for this plot. We'll begin exactly as before, but we're going to filter the MAGs down to something that isn't crowded and visually overwhelming. 
+I selected all the medium- and high-quality Proteobacteria, then sorted by taxonomic Order. This will make `ggplot` plot all the MAGs that are taxonomically related together, rather than by their arbitrary numerical identifiers. We're also discarding all the low-quality MAGs since they are full of sequences from who-knows-what. Total Frankenbacteria!
 
+
+```{r cruise_bubbles}
+rpkm_dat <- left_join(metag_rpkm, checkm_dat, by="mag") %>% 
+  left_join(gtdb_dat, by="mag") %>% 
+  filter(Completeness > 50 & Contamination < 10) %>% # good quality MAGs
+  filter(Phylum == "p__Proteobacteria") %>% # Proteobacteria only; this can easily be changed
+  mutate(mag = reorder(mag, Order, sort)) # sort by their taxonomic Order so everything shows up together
+ggplot(rpkm_dat, aes(x=Sample, y=mag, col=Order)) +
+  geom_point(aes(size=g_rpkm)) +
+  theme_Publication_legend_side() +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+```

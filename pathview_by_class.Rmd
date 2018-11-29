@@ -196,18 +196,18 @@ color scale using [colorbrewer2](http://colorbrewer2.org/#type=sequential&scheme
 lo_classes <- unique(rpkm_dat$Class)
 
 # Sulfur metabolism pathview for each class
-lo_pv.out_class <- lapply(lo_classes, function(class) {
-  setwd(paste0("C:/Users/Shannah/OneDrive/Uni-Year-5/MICB_405/Project2/pathview_output/", class, "/"))
-  pathview(gene.data = lo_rpkm_mat[[class]],
-           limit = list(gene = c(0,10)),
-           low = list(gene = "#91bfdb"),
-           mid = list(gene = "#ffffbf"),
-           high = list(gene = "#fc8d59"),
-           species = "ko",
-           pathway.id="00920",
-           kegg.dir=".")
-  
-})
+# lo_pv.out_class <- lapply(lo_classes, function(class) {
+#   setwd(paste0("C:/Users/Shannah/OneDrive/Uni-Year-5/MICB_405/Project2/pathview_output/", class, "/"))
+#   pathview(gene.data = lo_rpkm_mat[[class]],
+#            limit = list(gene = c(0,10)),
+#            low = list(gene = "#91bfdb"),
+#            mid = list(gene = "#ffffbf"),
+#            high = list(gene = "#fc8d59"),
+#            species = "ko",
+#            pathway.id="00920",
+#            kegg.dir=".")
+#   
+# })
 
 #Sulfur metabolism pathview grouped by class
 pv.out <- pathview(gene.data = pv_mat,
