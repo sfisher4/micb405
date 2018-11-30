@@ -1,6 +1,6 @@
 ---
 title: "Pathview Aggregated by Class"
-author: "Shannah"
+author: "Group 17"
 date: "November 25, 2018"
 output: html_document
 ---
@@ -13,7 +13,7 @@ library(RColorBrewer)
 library(knitr)
 ```
 
-Now we are going to read our tabular files. First is KO annotation tables (query.ko.txt) then the rpkm file. I'm using rename to assign names to each of the columns as these do not have headers.
+##Load in Data
 
 ```{r, read, warning=FALSE, message=FALSE}
 
@@ -23,6 +23,7 @@ ko <- read.table("SaanichInlet_MAGs_ORFs_ko.cleaned.txt") %>%
   dplyr::rename(ko = V2)
 
 #Read in all rpkm files from each cruise
+# Removing cruise from February (42)
 # rpkm_42 <- read.table("SI042_200m.RPKM.csv", header=FALSE, sep=',') %>% 
 #   dplyr::rename(orf = V1) %>% 
 #   dplyr::rename(rpkm = V2)
@@ -72,10 +73,8 @@ metag_rpkm <- read.table("SaanichInlet_200m_binned.rpkm.csv", header=T, sep=',')
   group_by(Sample, mag) %>% 
   summarise(g_rpkm = mean(RPKM)) %>% 
   mutate(mag = gsub('Inlet.', 'Inlet_', mag))
-```
 
-We can also determine the number of Phyla present in our bins, and how many MAGs are representing each. Of course, you can do this for all the taxonomic ranks. I'm also going to remove the Genus and Species fields since these are probably not relevant to your analysis (if so, then skip that step) and not very trustworthy given the whole binning procedure.
-```{r diversity}
+#Determine the number of Class present in our bins, and how many MAGs are representing each. 
 gtdb_dat %>% 
   group_by(Class) %>% 
   summarise(count = n_distinct(mag)) %>% 
@@ -83,13 +82,7 @@ gtdb_dat %>%
 gtdb_dat <- dplyr::select(gtdb_dat, mag, Kingdom, Phylum, Class, Order, Family)
 ```
 
-Next steps are to join these two tables and some basic transformations to make things a bit easier for `pathview`. 
-I've separated, or split, the `orf` value of each row into two new variables: `mag` and `orf_id` corresponding to the character string before and after the underscore in `orf`. This makes it easier to `group_by` MAGs and will be necessary for joining other tables (such as checkM, gtdbtk, etc.) into one dataframe (to rule them all).
-
-The `summarise` code is summing all RPKM values assigned to a KO number for each MAG. This is useful to prevent multiple rows in an eventual matrix for pathview for each copy found. Or accidentally dropping those data if we're not careful. Anyway, we can freely sum RPKM values and that is what is easiest here.
-
-__NOTE__: If your are dealing with RPKM values from multiple cruises (in this example I am only dealing with RPKM from SI042) you will also need to group by a `cruise` variable so these are not summed. Or maybe you want them to be if you are not interested in the time/season/cruise variable. 
-If you are interested in visualizing the variability in transcription of a single MAG across the cruises you may also want to `filter` for your MAG of interest then group by `ko` and `cruise`. It all depends on what question you want to answer so be mindful here!
+##More Data Modifications
 
 ```{r, arrange, warning=FALSE, message=FALSE}
 ko_rpkm_48 <- left_join(ko, rpkm_48, by="orf") %>% 
@@ -123,42 +116,18 @@ ko_rpkm_75 <- left_join(ko, rpkm_75, by="orf") %>%
   left_join(checkm_dat, by="mag") %>%
   left_join(metag_rpkm, by="mag")
 
+#We want to join all of the cruises together
 rpkm_dat <- rbind(ko_rpkm_48, ko_rpkm_73, ko_rpkm_74, ko_rpkm_75)
 
 head(rpkm_dat) %>% kable()
 
-
-#Commenting out connors tutorial code
-# rpkm_dat <- left_join(ko, metat_rpkm, by="orf") %>%
-#   separate(orf, into=c("prokka_id", "orf_id")) %>% # Split the Prokka ORF names into MAG identifier and ORF number for joining
-#   left_join(prokka_mag_map, by="prokka_id") %>% 
-#   left_join(gtdb_dat, by="mag") %>% 
-#   left_join(checkm_dat, by="mag")
-#
-# If you also wanted to add the RPKM abundance values from the metagenome:
-  # left_join(metag_rpkm, by="mag")
 ```
 
-Depending on your research question, you may want to subset your data by just the MAGs with the greatest completeness and least contamination, or by a taxonomy. Or, if you are wondering what the metabolic potential is of the entire community (well, at least the portion that was binned) you may want to aggregate the KO numbers by a taxonomic rank. 
 
-__NOTE__: some sort of aggregation or subsetting is probably essential with `pathview` since it has an upper limit of the number of samples that can be visualized... and by sample I mean MAG, cruise, or taxon. Really, this comes down to the number of columns in the final matrix you pass off to `pathview`. However, I recently found that updating your R version to 3.5.1 and installing the latest version of `pathview` increases this number to some as of yet unknown limit!
-
+##More Data Changes for Pathview Input
 ```{r subsetting, warning=FALSE, message=FALSE}
-# Subset by taxon (COMMENTING OUT BECASUE WE DON'T WANT TO DO THIS)
-# ko_rpkm <- rpkm_dat %>%
-#   filter(Phylum %in% c("p__Proteobacteria", "p__Nanoarchaeota", "p__Thermoplasmatota")) %>%
-#   group_by(mag, ko) %>% 
-#   summarise(t_rpkm = sum(rpkm)) %>% 
-#   spread(key = mag, value = t_rpkm)
 
-# Subset by completeness and contamination (COMMENTING OUT BECAUSE WE DON'T WANT TO DO THIS)
-# ko_rpkm <- rpkm_dat %>% 
-#   filter(Completeness >= 90 & Contamination < 5) %>% 
-#   group_by(mag, ko) %>% 
-#   summarise(t_rpkm = sum(rpkm)) %>% 
-#   spread(key = mag, value = t_rpkm)
-
-# Aggregate by Class, and summing RPKM of each KO number. [TODO: ? You could use mean() instead.]
+# Aggregate by Class, and mean RPKM of each KO number.
 lo_classes <- unique(rpkm_dat$Class)
 
 lo_rpkm_mat <- lapply(lo_classes, function(class) {
@@ -188,28 +157,31 @@ rownames(pv_mat) <- t_rpkm$ko
 
 ```
 
+##Pathview
+
 We will be viewing the sulfur metabolic pathway
 
-color scale using [colorbrewer2](http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3). 
+color scale using [colorbrewer2] (http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3). 
 
 ```{r, pathviewing, warning=FALSE, message=FALSE}
 lo_classes <- unique(rpkm_dat$Class)
 
 # Sulfur metabolism pathview for each class
-# lo_pv.out_class <- lapply(lo_classes, function(class) {
-#   setwd(paste0("C:/Users/Shannah/OneDrive/Uni-Year-5/MICB_405/Project2/pathview_output/", class, "/"))
-#   pathview(gene.data = lo_rpkm_mat[[class]],
-#            limit = list(gene = c(0,10)),
-#            low = list(gene = "#91bfdb"),
-#            mid = list(gene = "#ffffbf"),
-#            high = list(gene = "#fc8d59"),
-#            species = "ko",
-#            pathway.id="00920",
-#            kegg.dir=".")
-#   
-# })
+# We change the working dir so pathview prints into different folders in the loop 
+lo_pv.out_class <- lapply(lo_classes, function(class) {
+  setwd(paste0("C:/Users/Shannah/OneDrive/Uni-Year-5/MICB_405/Project2/pathview_output/", class, "/"))
+  pathview(gene.data = lo_rpkm_mat[[class]],
+           limit = list(gene = c(0,10)),
+           low = list(gene = "#91bfdb"),
+           mid = list(gene = "#ffffbf"),
+           high = list(gene = "#fc8d59"),
+           species = "ko",
+           pathway.id="00920",
+           kegg.dir=".")
 
-#Sulfur metabolism pathview grouped by class
+})
+
+# Sulfur metabolism pathview grouped by class
 pv.out <- pathview(gene.data = pv_mat,
                    limit = list(gene = c(0,10)),
                    low = list(gene = "#91bfdb"),

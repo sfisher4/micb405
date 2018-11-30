@@ -1,6 +1,6 @@
 ---
 title: "MICB 405 Project 2"
-author: "Shannah"
+author: "Team 17"
 date: "November 17, 2018"
 output:
   word_document: default
@@ -20,6 +20,7 @@ library(grid)
 
 ```
 
+###Load in Themes
 ```{r}
 #Before we get started, I am going to load a function to create a theme from https://rpubs.com/Koundy/71792, which is a nice theme that I will use throughout the rest of the plots.
 
@@ -108,7 +109,7 @@ theme_Publication_facets <- function(base_size=12) {
 }
 ```
 
-# Data
+## Data
 Load the data and put it in a format that we need for plotting
 ```{r}
 
@@ -156,7 +157,7 @@ ko <- read.table("SaanichInlet_MAGs_ORFs_ko.cleaned.txt") %>%
 rpkm_48 <- read.table("SI048_200m.RPKM.csv", header=FALSE, sep=',') %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(rpkm = V2)
-rpkm_72 <- read.table("SI048_200m.RPKM.csv", header=FALSE, sep=',') %>% 
+rpkm_72 <- read.table("SI072_200m.RPKM.csv", header=FALSE, sep=',') %>% 
   dplyr::rename(orf = V1) %>% 
   dplyr::rename(rpkm = V2)
 rpkm_73 <- read.table("SI073_200m.RPKM.csv", header=FALSE, sep=',') %>% 
@@ -228,13 +229,10 @@ head(rpkm_dat) %>% knitr::kable()
 
 ```
 
-# Contamination vs Completeness Scatter Plot
-First I will analyse the MAGs from checkM output with rpkm abundance values
+## Contamination vs Completeness Scatter Plot
+First we will analyse the MAGs from checkM output with rpkm abundance values
 Completeness and contamination ranges are based on quality standard definition from Bowers et al., 2017
 ```{r}
-
-#TODO: include a None lineage?
-#TODO: include range labels
 
 rpkm_dat <- left_join(metag_rpkm, checkm_dat, by="mag") %>% 
   left_join(gtdb_dat, by="mag") %>% 
@@ -245,14 +243,7 @@ rpkm_dat <- left_join(metag_rpkm, checkm_dat, by="mag") %>%
 #Plotting Completeness vs Contamination of MAGs at 200m
 rpkm_dat %>%
   ggplot(aes(x=Completeness, y=Contamination, col=Class)) +
-  # scale_size(range = c(1,10)) +
-  # xlim(c(50,100)) +
-  # ylim(c(0,100)) +
   geom_point() +
-  #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
-  # scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
-                                # "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
-                                # "#ffff99","#b15928", "#969696")) + 
   geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") +   #med completeness quality
   geom_vline(xintercept = 90, linetype = "dashed", size = 1, color = "#808080") +   #high completeness quality
   geom_hline(yintercept = 5, linetype = "dashed", size = 0.65, color = "#808080") +    #med contamination quality = 5-10%
@@ -260,21 +251,14 @@ rpkm_dat %>%
   xlab("Completeness (%)") +
   ylab("Contamination (%)") +
   theme_Publication_legend_side() 
-  # guides(color=guide_legend(nrow=5)) 
-    # labs(title="Completeness vs Contamination by Lineage")
 
 #-- PLOT WITH CONTAMINATION <= 100%! --
 #Plotting completeness vs contamination of MAGS at 200m, where contamination <=100%
 # Note: contamination above 100% indicates that the recovered bin likely contains multiple organisms. To analyze closer, this plot removes the contamination that is > 100%.
 rpkm_dat %>%
   dplyr::filter(Contamination < 100) %>%
-  # dplyr::filter(Completeness > 50) %>%
   ggplot(aes(x=Completeness, y=Contamination, colour=Class)) +
   geom_point(aes(size=g_rpkm)) +
-  #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
-  # scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
-                                # "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
-                                # "#ffff99","#b15928", "#969696")) + 
   #-- LOW COMPLETENESS--
   annotate("text", x=25, y=100, label="Low", 
             colour="black", text=element_text(size=9, family="Arial")) +
@@ -313,22 +297,16 @@ rpkm_dat %>%
   xlab("Completeness (%)") +
   ylab("Contamination (%)") +
   theme_Publication_legend_side()
-  # guides(color=guide_legend(nrow=5)) 
-  # labs(title="Completeness vs Contamination by Lineage")
 
 # ----- PLOT WITH ONLY THE DATA WE ARE GOING TO ANALYSE -----
 #This includes the medium-high quality MAGS at depth 200 and the cruises: 48, 72, 73. 74, and 75
-# We are not analyzing Cruise 42, even though we have access to it because all other cruises came from August and cruise 42 came from february. We know that seasons can affect the compostion and we didn't have enough data points to generalize for other seasons than summer (August)
+# We are not analyzing Cruise 42, even though we have access to it because all other cruises came from August and cruise 42 came from february. Because the inlet is seasonally anoxic, seasons affect the compostion and we didn't have enough data points to generalize for other seasons than summer (August)
 
 rpkm_dat %>%
   dplyr::filter(Contamination <= 10) %>%
   dplyr::filter(Completeness > 50) %>%
   ggplot(aes(x=Completeness, y=Contamination, colour=Class)) +
   geom_point(aes(size=g_rpkm)) +
-  #added discrete scales ; palette from colorbrewer2 but added extra ("#969696") b/c 13 values
-  # scale_color_manual(values = c('#a6cee3','#1f78b4',"#b2df8a","#33a02c","#fb9a99",
-                                # "#e31a1c",'#fdbf6f',"#ff7f00","#cab2d6","#6a3d9a",
-                                # "#ffff99","#b15928", "#969696")) + 
   #-- MED COMPLETENESS--
   geom_vline(xintercept = 50, linetype = "dashed", size = 1, color = "#808080") +   #med completeness quality
   annotate("text", x=70, y=12, label="Medium", 
@@ -363,14 +341,12 @@ rpkm_dat %>%
   xlab("Completeness (%)") +
   ylab("Contamination (%)") +
   theme_Publication_legend_side() 
-  # guides(color=guide_legend(nrow=5)) 
 
 ```
 
-# Bubble Plot
+## Bubble Plot of Classes
 Next I will create RPKM bubble-plot of each Sulphur-cycling gene versus taxonomy
 ```{r}
-#TODO: add category stripe of phylum
 
 #Data frame of ko values and their corresponding step in the pathway (found manually from pathview output)
 ko_to_step <- read_csv("KO-StepName-Mapping.csv")
@@ -393,7 +369,6 @@ pv_steps_dat %>%
   ggplot(aes(x=StepName, y=Class, size = rpkm, color = rpkm)) + 
   geom_point() + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  # labs(title = "Class vs Steps of Interest in Sulfur Metabolic Pathway") +
   scale_color_gradientn(limits = c(0,5),
                         colours = c("#b10026",  "#e31a1c","#fc4e2a", "#fd8d3c", "#feb24c", "#fed976"),
                         breaks = c(0,1,2,3,4,5),
@@ -407,10 +382,9 @@ pv_steps_dat %>%
 
 ```
 
-# Bubble Plot from gamma proteobacteria
+## Bubble Plot from gamma proteobacteria
 Next I will create RPKM bubble-plot of each Nitrogen/Sulphur-cycling gene versus taxonomy
 ```{r}
-#TODO: add category stripe of phylum
 
 #Data frame of ko values and their corresponding step in the pathway (found manually from pathview output)
 ko_to_step <- read_csv("KO-StepName-Mapping.csv")
@@ -433,7 +407,6 @@ pv_steps_dat %>%
   ggplot(aes(x=StepName, y=Order)) + 
   geom_point(aes(size = rpkm, color=rpkm)) + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  # labs(title = "Order of Gammaproteobacteria vs Steps in Sulfur Metabolic Pathway") +
   scale_color_gradientn(limits = c(0,5),
                         colours = c("#b10026",  "#e31a1c","#fc4e2a", "#fd8d3c", "#feb24c", "#fed976"),
                         breaks = c(0,1,2,3,4,5),
@@ -449,7 +422,7 @@ pv_steps_dat %>%
 
 
 
-# Geochemical Gradients
+## Geochemical Gradients
 ```{r}
 # Load raw data
 raw_dat <- readr::read_csv("Saanich_Data.csv")
@@ -524,19 +497,17 @@ dat %>%
 
 ```
 
-For this next plot, we will determine the relative abundance of these MAGs across the different cruises and time points. We don't want to use the mean RPKM value across the cruises so we are going to create a new dataframe for this plot. We'll begin exactly as before, but we're going to filter the MAGs down to something that isn't crowded and visually overwhelming. 
-I selected all the medium- and high-quality Proteobacteria, then sorted by taxonomic Order. This will make `ggplot` plot all the MAGs that are taxonomically related together, rather than by their arbitrary numerical identifiers. We're also discarding all the low-quality MAGs since they are full of sequences from who-knows-what. Total Frankenbacteria!
-
+## Relative Abundance of MAGs across Cruises
 
 ```{r cruise_bubbles}
 rpkm_dat <- left_join(metag_rpkm, checkm_dat, by="mag") %>% 
   left_join(gtdb_dat, by="mag") %>% 
   filter(Completeness > 50 & Contamination < 10) %>% # good quality MAGs
-  filter(Phylum == "p__Proteobacteria") %>% # Proteobacteria only; this can easily be changed
-  mutate(mag = reorder(mag, Order, sort)) # sort by their taxonomic Order so everything shows up together
-ggplot(rpkm_dat, aes(x=Sample, y=mag, col=Order)) +
+  mutate(mag = reorder(mag, Class, sort)) # sort by their taxonomic Order so everything shows up together
+ggplot(rpkm_dat, aes(x=Sample, y=mag, col=Class)) +
   geom_point(aes(size=g_rpkm)) +
   theme_Publication_legend_side() +
   theme(axis.text.x = element_text(angle = 45,
-                                   hjust = 1))
+                                   hjust = 1)) 
 ```
+

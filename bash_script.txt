@@ -1,0 +1,49 @@
+#!/bin/bash
+
+
+echo "Open Reading Frame Analysis"
+
+for f in /projects/micb405/resources/project_2/2018/SaanichInlet_200m/MetaBAT2_SaanichInlet_200m/MedQPlus_MAGs/*.fa
+do
+        sid=$(basename $f | sed 's/.fa//g')
+        tax=$(grep -w $sid /projects/micb405/resources/project_2/2018/SaanichInlet_200m/MetaBAT2_SaanichInlet_200m/gtdbtk_output/gtdbtk.*.classification_pplacer.tsv | awk '{ print $2 }' | awk -F";" '{ print$1 }' | sed 's/d__//g')
+        echo $sid, $tax
+        prokka --kingdom $tax --outdir ~/Project2/Prokka_output/$sid/ --force $f --prefix $sid $f
+done
+
+echo "Indexing Reference"
+
+bwa index -p ~/Project2/BWA_output/SaanichInlet_MAG_ORFs.index.fa ~/Project2/Prokka_output/SaanichInlet_MAG_ORFs.ffn
+
+
+echo "Aligning to Reference"
+
+echo "Analyzing SI042"
+
+bwa mem -t 4 ~/Project2/BWA_output/SaanichInlet_MAG_ORFs.index.fa /projects/micb405/resources/project_2/2018/Metatranscriptomes/SI042_200m.qtrim.artifact.rRNA.clean.fastq 1> ~/Project2/BWA_output/SI042_200m.sam 2> ~/Project2/BWA_output/SI042_200m.txt
+
+for f in /projects/micb405/resources/project_2/2018/Metatranscriptomes/*_200m.qtrim.artifact.rRNA.clean.fastq.gz
+do
+        sid=$(basename $f | sed 's/.qtrim.artifact.rRNA.clean.fastq.gz//g')
+        echo "Analyzing $sid"
+        bwa mem -t 4 ~/Project2/BWA_output/SaanichInlet_MAG_ORFs.index.fa /projects/micb405/resources/project_2/2018/Metatranscriptomes/$sid.qtrim.artifact.rRNA.clean.fastq.gz 1> ~/Project2/BWA_output/$sid.sam 2> ~/Project2/BWA_output/$sid.txt
+done
+
+echo "Analyzing Metatranscriptomics"
+
+for s in ~/Project2/BWA_output/*.sam
+do
+        sid=$(basename $s | sed 's/.sam//g')
+        echo "Analyzing $sid"
+        /projects/micb405/resources/project_2/2018/rpkm -c ~/Project2/Prokka_output/SaanichInlet_200m_MAG_ORFs.ffn -a ~/Project2/BWA_output/$sid.sam -o ~/Project2/RPKM_output/$sid.RPKM.csv
+done
+
+echo "Creating a PROKKA Map"
+for f in ~/Project2/Prokka_output/Saanich*/Saanich*faa
+do
+        prokka_id=$(head -1 $f | awk -F_ '{print $1 }' | sed 's/^>//g')
+        mag_id=$(basename $f | sed 's/.faa//g')
+        echo $prokka_id,$mag_id
+done >~/Project2/Prokka_output/Prokka_MAG_map_basename.csv
+
+
